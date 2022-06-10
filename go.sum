@@ -3,6 +3,7 @@ github.com/go-gl/glfw/v3.3/glfw v0.0.0-20220320163800-277f93cfa958 h1:TL70PMkdPC
 github.com/go-gl/glfw/v3.3/glfw v0.0.0-20220320163800-277f93cfa958/go.mod h1:tQ2UAYgL5IevRw8kRxooKSPJfGvJ9fJQFa0TUsXzTg8=
 github.com/gofrs/flock v0.8.1 h1:+gYjHKf32LDeiEEFhQaotPbLuUXjY5ZqxKgXy7n59aw=
 github.com/gofrs/flock v0.8.1/go.mod h1:F1TvTiK9OcQqauNUHlbJvyl9Qa1QvF/gOUDKA14jxHU=
+github.com/hajimehoshi/bitmapfont/v2 v2.2.0 h1:E6vzlchynZj6OVohVKFqWkKW348EmDW62K5zPXDi7A8=
 github.com/hajimehoshi/bitmapfont/v2 v2.2.0/go.mod h1:Llj2wTYXMuCTJEw2ATNIO6HbFPOoBYPs08qLdFAxOsQ=
 github.com/hajimehoshi/ebiten/v2 v2.3.3 h1:v72UzprVvWGE+HGcypkLI9Ikd237fqzpio5idPk9KNI=
 github.com/hajimehoshi/ebiten/v2 v2.3.3/go.mod h1:vxwpo0q0oSi1cIll0Q3Ui33TVZgeHuFVYzIRk7FwuVk=
@@ -33,7 +34,6 @@ golang.org/x/exp v0.0.0-20190731235908-ec7cb31e5a56/go.mod h1:JhuoJpWY28nO4Vef9t
 golang.org/x/image v0.0.0-20190227222117-0694c2d4d067/go.mod h1:kZ7UVZpmo3dzQBMxlp+ypCbDeSB+sBbTgSJuh5dn5js=
 golang.org/x/image v0.0.0-20190802002840-cff245a6509b/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/image v0.0.0-20211028202545-6944b10bf410/go.mod h1:023OzeP/+EPmXeapQh35lcL3II3LrY8Ic+EFFKVhULM=
-golang.org/x/image v0.0.0-20220321031419-a8550c1d254a h1:LnH9RNcpPv5Kzi15lXg42lYMPUf0x8CuPv1YnvBWZAg=
 golang.org/x/image v0.0.0-20220321031419-a8550c1d254a/go.mod h1:023OzeP/+EPmXeapQh35lcL3II3LrY8Ic+EFFKVhULM=
 golang.org/x/image v0.0.0-20220601225756-64ec528b34cd h1:9NbNcTg//wfC5JskFW4Z3sqwVnjmJKHxLAol1bW2qgw=
 golang.org/x/image v0.0.0-20220601225756-64ec528b34cd/go.mod h1:doUCurBvlfPMKfmIpRIywoHmhN3VyhnoFDbvIEWF4hY=

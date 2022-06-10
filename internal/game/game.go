@@ -13,6 +13,8 @@ import (
 	"golang.org/x/image/font/opentype"
 	"image/color"
 	"log"
+	"math"
+	"math/rand"
 )
 
 type Mode int
@@ -78,10 +80,10 @@ func init() {
 }
 
 type Game struct {
-	headX         float64
-	headY         float64
-	foodPositionX float64
-	foodPositionY float64
+	headX float64
+	headY float64
+	foodX float64
+	foodY float64
 
 	direction Direction
 
@@ -96,11 +98,9 @@ func New() *Game {
 	bg.Fill(color.RGBA{R: 240, G: 150, B: 100, A: 1})
 
 	return &Game{
-		foodPositionX: float64(configs.ScreenWidth)/2 - 20,
-		foodPositionY: float64(configs.ScreenHeight)/2 + 20,
-		bg:            bg,
-		direction:     Right,
-		mode:          ModeTitle,
+		bg:        bg,
+		direction: Right,
+		mode:      ModeTitle,
 	}
 }
 
@@ -112,15 +112,17 @@ func (g *Game) Update() error {
 		return nil
 	}
 	g.ManageControlKey()
-	dx, dy := g.Move()
-	g.headX += dx
-	g.headY += dy
+	g.Move()
+	g.CheckFoodCollision()
+	if g.isBeyondBorders() {
+		g.end()
+	}
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(g.bg, &ebiten.DrawImageOptions{})
-	if g.mode != ModeTitle {
+	if g.mode == ModeGame {
 		g.drawHead(screen)
 		g.drawFood(screen)
 		return
@@ -141,8 +143,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		text.Draw(screen, l, arcadeFont, x, (i+4)*configs.FontSize, color.RGBA{0, 255, 0, 255})
 	}
 
-	scoreStr := fmt.Sprintf("%04d", g.Score())
-	text.Draw(screen, scoreStr, arcadeFont, configs.ScreenWidth-len(scoreStr)*configs.FontSize, configs.FontSize, color.RGBA{0, 255, 0, 255})
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %0.2f", ebiten.CurrentTPS()))
 }
 
@@ -210,35 +210,103 @@ func (g *Game) ManageControlKey() {
 	}
 }
 
-func (g Game) Move() (dx, dy float64) {
+func (g *Game) Move() {
 	w, h := headImage.Size()
 
 	switch g.direction {
 	case Left:
-		dx -= float64(w / 60)
+		g.headX -= math.Ceil(float64(w) / 30)
 	case Up:
-		dy += float64(h / 60)
+		g.headY -= math.Ceil(float64(h) / 30)
 	case Right:
-		dx += float64(w / 60)
+		g.headX += math.Ceil(float64(w) / 30)
 	case Down:
-		dy -= float64(w / 60)
+		g.headY += math.Ceil(float64(w) / 30)
 	}
-	return dx, dy
 }
 
 func (g *Game) drawHead(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("(%0.2f, %0.2f)", g.headX, g.headY))
+	ebitenutil.DebugPrint(screen, fmt.Sprintf(
+		"Head: (%0.2f, %0.2f)\nFood: (%0.2f, %0.2f)\nTPS: %0.2f\nSCORE: %d",
+		g.headX,
+		g.headY,
+		g.foodX,
+		g.foodY,
+		ebiten.CurrentTPS(),
+		g.Score()),
+	)
 	op.GeoM.Translate(g.headX, g.headY)
-	op.GeoM.Translate(configs.HeadInitialX, configs.HeadInitialY)
-
+	if g.Score() == 0 {
+		op.GeoM.Translate(configs.HeadInitialX, configs.HeadInitialY)
+	} else {
+		op.GeoM.Translate(configs.ScreenWidth/2, configs.ScreenHeight/2)
+	}
 	screen.DrawImage(headImage, op)
 }
 
 func (g Game) drawFood(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
 
-	op.GeoM.Translate(g.foodPositionX, g.foodPositionY)
+	op.GeoM.Translate(g.foodX, g.foodY)
+	if g.Score() == 0 {
+		op.GeoM.Translate(configs.FoodInitialX, configs.FoodInitialY)
+	} else {
+		op.GeoM.Translate(configs.ScreenWidth/2, configs.ScreenHeight/2)
+	}
 
 	screen.DrawImage(foodImage, op)
+}
+
+func (g *Game) CheckFoodCollision() {
+	hw, hh := headImage.Size()
+	fw, fh := foodImage.Size()
+	if g.headX+float64(hw) >= g.foodX && g.headX <= g.foodX+float64(fw) {
+		if g.headY+float64(hh) >= g.foodY && g.headY <= g.foodY+float64(fh) {
+			newX, newY :=
+				rand.Intn(configs.ScreenWidth/2-fw)-rand.Intn(configs.ScreenWidth/2),
+				rand.Intn(configs.ScreenHeight/2-fh)-rand.Intn(configs.ScreenHeight/2)
+			g.foodX, g.foodY = float64(newX), float64(newY)
+			g.IncrementScore()
+		}
+	}
+}
+
+func (g *Game) isBeyondBorders() bool {
+	hw, hh := headImage.Size()
+
+	if g.headX < -configs.ScreenWidth/2 {
+		return true
+	}
+
+	if g.headX+float64(hw) > configs.ScreenWidth/2 {
+		return true
+	}
+
+	if g.headY < -configs.ScreenHeight/2 {
+		return true
+	}
+
+	if g.headY+float64(hh) > configs.ScreenHeight/2 {
+		return true
+	}
+
+	return false
+}
+
+func (g *Game) end() {
+	g.reset()
+	g.mode = ModeGameOver
+}
+
+func (g *Game) reset() {
+	bg := ebiten.NewImage(configs.ScreenWidth, configs.ScreenHeight)
+	bg.Fill(color.RGBA{R: 240, G: 150, B: 100, A: 1})
+
+	g.mode = ModeGameOver
+	g.score = 0
+	g.bg = bg
+	g.headX, g.headY = configs.HeadInitialX, configs.HeadInitialY
+	g.foodX, g.foodY = configs.FoodInitialX, configs.FoodInitialY
+	titleTexts, texts = []string{}, []string{}
 }
