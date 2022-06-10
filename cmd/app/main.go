@@ -16,7 +16,7 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	ebiten.SetWindowSize(configs.ScreenWidth, configs.ScreenHeight)
+	ebiten.SetWindowSize(configs.ScreenWidth, int(configs.ScreenHeight*1.05))
 	ebiten.SetWindowTitle(configs.Title)
 	ebiten.SetWindowIcon([]image.Image{logo})
 }

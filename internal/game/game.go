@@ -1,8 +1,10 @@
 package game
 
 import (
+	"errors"
 	"fmt"
-	"github.com/Valghall/zmeika/internal/configs"
+	"github.com/Valghall/zmeika/internal/cell"
+	c "github.com/Valghall/zmeika/internal/configs"
 	"github.com/Valghall/zmeika/internal/food"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -13,18 +15,18 @@ import (
 	"golang.org/x/image/font/opentype"
 	"image/color"
 	"log"
-	"math"
 	"math/rand"
 )
 
 type Mode int
-type Direction int
 
 const (
 	ModeTitle Mode = iota
 	ModeGame
 	ModeGameOver
 )
+
+type Direction int
 
 const (
 	Left Direction = iota
@@ -33,19 +35,33 @@ const (
 	Down
 )
 
+type SpeedLimiter int
+
+const (
+	X1 SpeedLimiter = 60/10 + iota
+	X2
+	X3
+)
+
 var (
-	headImage       *ebiten.Image
-	foodImage       *ebiten.Image
+	headImage *ebiten.Image
+	foodImage *ebiten.Image
+	cellImage *ebiten.Image
+
 	titleArcadeFont font.Face
 	arcadeFont      font.Face
 	smallArcadeFont font.Face
 	titleTexts      []string
 	texts           []string
+
+	ErrOutOfBorders = errors.New("out of border")
 )
 
 func init() {
 	foodImage = food.New()
-	headImage = ebiten.NewImage(configs.ScreenWidth/20, configs.ScreenHeight/20)
+	cellImage = cell.New()
+
+	headImage = ebiten.NewImage(c.ScreenWidth/20, c.ScreenHeight/20)
 	headImage.Fill(color.RGBA{0, 255, 0, 255})
 
 	tt, err := opentype.Parse(fonts.PressStart2P_ttf)
@@ -54,7 +70,7 @@ func init() {
 	}
 	const dpi = 72
 	titleArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    configs.TitleFontSize,
+		Size:    c.TitleFontSize,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
@@ -62,7 +78,7 @@ func init() {
 		log.Fatal(err)
 	}
 	arcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    configs.FontSize,
+		Size:    c.FontSize,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
@@ -70,7 +86,7 @@ func init() {
 		log.Fatal(err)
 	}
 	smallArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    configs.SmallFontSize,
+		Size:    c.SmallFontSize,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
@@ -80,10 +96,10 @@ func init() {
 }
 
 type Game struct {
-	headX float64
-	headY float64
-	foodX float64
-	foodY float64
+	headP int
+	foodP int
+
+	moveTO int
 
 	direction Direction
 
@@ -94,13 +110,15 @@ type Game struct {
 }
 
 func New() *Game {
-	bg := ebiten.NewImage(configs.ScreenWidth, configs.ScreenHeight)
+	bg := ebiten.NewImage(c.ScreenWidth, c.ScreenHeight)
 	bg.Fill(color.RGBA{R: 240, G: 150, B: 100, A: 1})
 
 	return &Game{
 		bg:        bg,
 		direction: Right,
 		mode:      ModeTitle,
+		headP:     c.HeadInitialP,
+		foodP:     c.FoodInitialP,
 	}
 }
 
@@ -112,21 +130,30 @@ func (g *Game) Update() error {
 		return nil
 	}
 	g.ManageControlKey()
-	g.Move()
-	g.CheckFoodCollision()
-	if g.isBeyondBorders() {
+	if err := g.Move(); err != nil {
 		g.end()
 	}
+
+	g.CheckFoodCollision()
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.DrawImage(g.bg, &ebiten.DrawImageOptions{})
+
 	if g.mode == ModeGame {
+		g.drawArea(screen)
 		g.drawHead(screen)
 		g.drawFood(screen)
+		ebitenutil.DebugPrintAt(
+			screen,
+			fmt.Sprintf("SCORE: %d", g.Score()),
+			0,
+			c.ScreenHeight,
+		)
 		return
 	}
+
+	screen.DrawImage(g.bg, &ebiten.DrawImageOptions{})
 	switch g.mode {
 	case ModeTitle:
 		titleTexts = []string{"ZMEIKA"}
@@ -135,26 +162,35 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		texts = []string{"", "GAME OVER!"}
 	}
 	for i, l := range titleTexts {
-		x := (configs.ScreenWidth - len(l)*configs.TitleFontSize) / 2
-		text.Draw(screen, l, titleArcadeFont, x, (i+4)*configs.TitleFontSize, color.RGBA{0, 255, 0, 255})
+		x := (c.ScreenWidth - len(l)*c.TitleFontSize) / 2
+		text.Draw(screen, l, titleArcadeFont, x, (i+4)*c.TitleFontSize, color.RGBA{0, 255, 0, 255})
 	}
 	for i, l := range texts {
-		x := (configs.ScreenWidth - len(l)*configs.FontSize) / 2
-		text.Draw(screen, l, arcadeFont, x, (i+4)*configs.FontSize, color.RGBA{0, 255, 0, 255})
+		x := (c.ScreenWidth - len(l)*c.FontSize) / 2
+		text.Draw(screen, l, arcadeFont, x, (i+4)*c.FontSize, color.RGBA{0, 255, 0, 255})
 	}
 
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %0.2f", ebiten.CurrentTPS()))
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return configs.ScreenWidth, configs.ScreenHeight
+	return c.ScreenWidth, int(c.ScreenHeight * 1.05)
+}
+
+func (g *Game) drawArea(screen *ebiten.Image) {
+
+	for i := 0; i < c.AoC; i++ {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(g.pos(i))
+		screen.DrawImage(cellImage, op)
+	}
 }
 
 func (g Game) Score() int {
 	return g.score
 }
 
-func (g *Game) IncrementScore() {
+func (g *Game) incrementScore() {
 	g.score++
 }
 
@@ -175,7 +211,7 @@ func (g Game) IsKeyPressed() bool {
 func (g *Game) ManageControlKey() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyA) {
-		if g.direction != Left {
+		if g.direction != Right {
 			g.direction = Left
 		}
 
@@ -184,7 +220,7 @@ func (g *Game) ManageControlKey() {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyW) {
-		if g.direction != Up {
+		if g.direction != Down {
 			g.direction = Up
 		}
 
@@ -193,7 +229,7 @@ func (g *Game) ManageControlKey() {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyD) {
-		if g.direction != Right {
+		if g.direction != Left {
 			g.direction = Right
 		}
 
@@ -202,7 +238,7 @@ func (g *Game) ManageControlKey() {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) ||
 		inpututil.IsKeyJustPressed(ebiten.KeyS) {
-		if g.direction != Down {
+		if g.direction != Up {
 			g.direction = Down
 		}
 
@@ -210,103 +246,81 @@ func (g *Game) ManageControlKey() {
 	}
 }
 
-func (g *Game) Move() {
-	w, h := headImage.Size()
+func (g *Game) Move() error {
+	if g.moveTO != 0 {
+		g.moveTO--
+		return nil
+	}
+	g.TO()
 
 	switch g.direction {
 	case Left:
-		g.headX -= math.Ceil(float64(w) / 30)
+		g.headP--
+		if clouse := g.headP % c.CiaR; clouse == c.CiaR-1 || clouse == -1 {
+			log.Printf("Snake died at cell No %d, moving in direction %d\n", g.headP, g.direction)
+			return ErrOutOfBorders
+		}
 	case Up:
-		g.headY -= math.Ceil(float64(h) / 30)
+		g.headP -= c.CiaR
+		if g.headP < 1 {
+			log.Printf("Snake died at cell No %d, moving in direction %d\n", g.headP, g.direction)
+			return ErrOutOfBorders
+		}
 	case Right:
-		g.headX += math.Ceil(float64(w) / 30)
+		g.headP++
+		if g.headP%c.CiaR == 0 {
+			log.Printf("Snake died at cell No %d, moving in direction %d\n", g.headP, g.direction)
+			return ErrOutOfBorders
+		}
 	case Down:
-		g.headY += math.Ceil(float64(w) / 30)
+		g.headP += c.CiaR
+		if g.headP > c.AoC {
+			log.Printf("Snake died at cell No %d, moving in direction %d\n", g.headP, g.direction)
+			return ErrOutOfBorders
+		}
 	}
+
+	return nil
 }
 
 func (g *Game) drawHead(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf(
-		"Head: (%0.2f, %0.2f)\nFood: (%0.2f, %0.2f)\nTPS: %0.2f\nSCORE: %d",
-		g.headX,
-		g.headY,
-		g.foodX,
-		g.foodY,
-		ebiten.CurrentTPS(),
-		g.Score()),
-	)
-	op.GeoM.Translate(g.headX, g.headY)
-	if g.Score() == 0 {
-		op.GeoM.Translate(configs.HeadInitialX, configs.HeadInitialY)
-	} else {
-		op.GeoM.Translate(configs.ScreenWidth/2, configs.ScreenHeight/2)
-	}
+	op.GeoM.Translate(g.pos(g.headP))
 	screen.DrawImage(headImage, op)
 }
 
 func (g Game) drawFood(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{Filter: ebiten.FilterLinear}
-
-	op.GeoM.Translate(g.foodX, g.foodY)
-	if g.Score() == 0 {
-		op.GeoM.Translate(configs.FoodInitialX, configs.FoodInitialY)
-	} else {
-		op.GeoM.Translate(configs.ScreenWidth/2, configs.ScreenHeight/2)
-	}
-
+	op.GeoM.Translate(g.pos(g.foodP))
 	screen.DrawImage(foodImage, op)
 }
 
 func (g *Game) CheckFoodCollision() {
-	hw, hh := headImage.Size()
-	fw, fh := foodImage.Size()
-	if g.headX+float64(hw) >= g.foodX && g.headX <= g.foodX+float64(fw) {
-		if g.headY+float64(hh) >= g.foodY && g.headY <= g.foodY+float64(fh) {
-			newX, newY :=
-				rand.Intn(configs.ScreenWidth/2-fw)-rand.Intn(configs.ScreenWidth/2),
-				rand.Intn(configs.ScreenHeight/2-fh)-rand.Intn(configs.ScreenHeight/2)
-			g.foodX, g.foodY = float64(newX), float64(newY)
-			g.IncrementScore()
-		}
+
+	if g.headP == g.foodP {
+		g.foodP = rand.Intn(40) + 1
+		g.incrementScore()
 	}
-}
-
-func (g *Game) isBeyondBorders() bool {
-	hw, hh := headImage.Size()
-
-	if g.headX < -configs.ScreenWidth/2 {
-		return true
-	}
-
-	if g.headX+float64(hw) > configs.ScreenWidth/2 {
-		return true
-	}
-
-	if g.headY < -configs.ScreenHeight/2 {
-		return true
-	}
-
-	if g.headY+float64(hh) > configs.ScreenHeight/2 {
-		return true
-	}
-
-	return false
 }
 
 func (g *Game) end() {
-	g.reset()
+	bg := ebiten.NewImage(c.ScreenWidth, c.ScreenHeight)
+	bg.Fill(color.RGBA{R: 240, G: 150, B: 100, A: 1})
+	g.score = 0
+	g.direction = Right
+	g.bg = bg
+	g.headP = c.HeadInitialP
+	g.foodP = c.FoodInitialP
+	titleTexts, texts = []string{}, []string{}
 	g.mode = ModeGameOver
 }
 
-func (g *Game) reset() {
-	bg := ebiten.NewImage(configs.ScreenWidth, configs.ScreenHeight)
-	bg.Fill(color.RGBA{R: 240, G: 150, B: 100, A: 1})
+func (g Game) pos(position int) (float64, float64) {
+	x := position % 20
+	y := position / 20
+	return float64(x) * c.CellWidth, float64(y) * c.CellHeight
+}
 
-	g.mode = ModeGameOver
-	g.score = 0
-	g.bg = bg
-	g.headX, g.headY = configs.HeadInitialX, configs.HeadInitialY
-	g.foodX, g.foodY = configs.FoodInitialX, configs.FoodInitialY
-	titleTexts, texts = []string{}, []string{}
+func (g *Game) TO() {
+	g.moveTO += int(X1)
 }
