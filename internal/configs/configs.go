@@ -7,10 +7,18 @@ const (
 	TitleFontSize = FontSize * 1.5
 	FontSize      = 24
 	SmallFontSize = FontSize / 2
-	LogoPath      = "./images/logo2.png"
-	FoodPath      = "./images/apple.png"
-	HeadInitialX  = float64(ScreenWidth)/2 - 100
-	HeadInitialY  = float64(ScreenHeight) / 2
-	FoodInitialX  = float64(ScreenWidth)/2 + 100
-	FoodInitialY  = float64(ScreenWidth) / 2
+
+	LogoPath = "./images/logo2.png"
+	FoodPath = "./images/apple.png"
+	CellPath = "./images/cell.png"
+
+	HeadInitialP = 205
+	FoodInitialP = 215
+
+	CiaR = 20          // Cells in a Row
+	CiaC = 20          // Cells in a Column
+	AoC  = CiaR * CiaC // Amount of Cells
+
+	CellWidth  = ScreenWidth / CiaR
+	CellHeight = ScreenHeight / CiaC
 )
