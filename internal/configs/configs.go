@@ -11,6 +11,7 @@ const (
 	LogoPath = "./images/logo2.png"
 	FoodPath = "./images/apple.png"
 	CellPath = "./images/cell.png"
+	TailPath = "./images/tail.png"
 
 	HeadInitialP = 205
 	FoodInitialP = 215

@@ -4,6 +4,7 @@ import (
 	"github.com/Valghall/zmeika/internal/configs"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	_ "image/png"
 	"log"
 )
 
